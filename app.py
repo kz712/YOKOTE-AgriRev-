@@ -5,7 +5,7 @@ from datetime import datetime
 
 # ページ基本設定
 st.set_page_config(
-    page_title="YOKOTE AgriRev 出荷予定タイムライン",  # 🌟 ブラウザのタブ名などを変更
+    page_title="YOKOTE AgriRev 出荷予定タイムライン",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -19,7 +19,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 🌟 画面内のメインタイトルを変更
+# 画面内のメインタイトル
 st.title("📦 YOKOTE AgriRev 出荷予定タイムライン")
 st.markdown("Googleフォームから集計された出荷予定データをガントチャート形式でリアルタイムに表示します。")
 
@@ -36,10 +36,16 @@ def load_data(source_url_or_path):
             st.error(f"⚠️ スプレッドシートに以下の設問名が見つかりません: {missing_cols}")
             return pd.DataFrame()
         
-        df['出荷開始日'] = pd.to_datetime(df['出荷開始予定日'], errors='coerce')
-        df['出荷終了日'] = pd.to_datetime(df['出荷終了予定日'], errors='coerce')
-        df = df.dropna(subset=['出荷開始日', '出荷終了日'])
+        # 🌟 対策1: 日付変換時にタイムゾーン（時差）のバグを防ぐため、シンプルな日付型として読み込み
+        df['出荷開始日'] = pd.to_datetime(df['出荷開始予定日'], errors='coerce').dt.date
+        df['出荷終了日_元データ'] = pd.to_datetime(df['出荷終了予定日'], errors='coerce').dt.date
+        
+        df = df.dropna(subset=['出荷開始日', '出荷終了日_元データ'])
         df['出荷予定ケース数'] = pd.to_numeric(df['出荷予定ケース数'], errors='coerce').fillna(0)
+        
+        # 🌟 対策2: Plotlyの仕様（終了日の0時00分までしか描画されない問題）への対応
+        # グラフ描画用には「終了日 + 1日」した日付を渡し、その日のギリギリまでバーを伸ばします
+        df['出荷終了日_グラフ用'] = pd.to_datetime(df['出荷終了日_元データ']) + pd.Timedelta(days=1)
         
         # 文字の視認性を上げるため、文字色をHTMLタグで明示的に指定（白文字）
         df['バー表示ラベル'] = df.apply(
@@ -93,26 +99,24 @@ if not df.empty:
     # --- 4. ガントチャート（タイムライン）描画 ---
     st.subheader("📅 出荷スケジュール（ガントチャート）")
     
-    if not filtered_df.empty and filtered_df['出荷開始日'].notna().any():
+    if not filtered_df.empty:
         try:
-            filtered_df['出荷開始日'] = pd.to_datetime(filtered_df['出荷開始日'])
-            filtered_df['出荷終了日'] = pd.to_datetime(filtered_df['出荷終了日'])
-
-            # color_discrete_sequence に視認性が高くはっきりした色合いの「Bold」パレットを採用
+            # 🌟 グラフの終了日キーを「出荷終了日_グラフ用」に指定
             fig = px.timeline(
                 filtered_df, 
                 x_start="出荷開始日", 
-                x_end="出荷終了日", 
+                x_end="出荷終了日_グラフ用", 
                 y="行一意キー",
                 color="品種", 
                 text="バー表示ラベル",
                 hover_data={   
                     "出荷予定ケース数": ":,d", 
-                    "出荷開始予定日": True, 
-                    "出荷終了予定日": True,
+                    "出荷開始予定日": True,   # 元データのテキストを表示
+                    "出荷終了予定日": True,   # 元データのテキストを表示
                     "生産者": True,
                     "バー表示ラベル": False,
-                    "行一意キー": False
+                    "行一意キー": False,
+                    "出荷終了日_グラフ用": False  # 内部補正用の日付は隠す
                 },
                 labels={"品種": "栽培品種"},
                 color_discrete_sequence=px.colors.qualitative.Bold
@@ -127,7 +131,6 @@ if not df.empty:
             
             fig.update_yaxes(autorange="reversed")
             
-            # 行数に応じて高さを動的に変更（1行あたり70pxにしてさらに文字の上下余白を確保）
             row_count = len(filtered_df)
             dynamic_height = max(350, row_count * 70)
             
@@ -140,16 +143,11 @@ if not df.empty:
                 font=dict(size=12)
             )
             
-            # 文字のフォントサイズを「12」に拡大し、太字化、輪郭線を少しつけて文字をくっきりさせました
             fig.update_traces(
                 textposition='inside', 
                 insidetextanchor='middle',
-                textfont=dict(
-                    size=12, 
-                    color="white", 
-                    family="Arial, sans-serif"
-                ),
-                width=0.85  # 帯の太さのバランスを微調整
+                textfont=dict(size=12, color="white", family="Arial, sans-serif"),
+                width=0.85
             )
             st.plotly_chart(fig, use_container_width=True)
             
