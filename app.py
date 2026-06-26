@@ -136,12 +136,21 @@ if not df.empty:
                 fig.update_yaxes(showticklabels=False, title_text="", showgrid=False)
                 fig.update_yaxes(autorange="reversed")
                 
-                # 🌟 変更点：X軸（日付目盛り）を「月/日」にし、1日刻み（86400000ミリ秒）に設定
+                # 🌟 変更点：頭の0を消すフォーマットにし、dtick固定を解除して自動で見やすい間隔に調整
                 fig.update_xaxes(
-                    tickformat="%m/%d",        # 日付のフォーマットを「月/日」に指定
-                    dtick=86400000,            # 1日間をミリ秒換算（1000ms * 60s * 60m * 24h * 1日）
-                    showgrid=True,             # 1日ごとの縦のグリッド線を表示
-                    gridcolor="rgba(200, 200, 200, 0.4)" # グリッド線を少し薄めのグレーに
+                    tickformat="%e/%b",        # 頭の0を省いた「日/月」表記（Plotlyのロケール標準）
+                    hoverformat="%Y/%m/%d",    # マウスを乗せた時はわかりやすく年月日表記
+                    showgrid=True,             
+                    gridcolor="rgba(200, 200, 200, 0.3)" 
+                )
+                
+                # 🌟 さらに、目盛りテキストを「7/5」のような日本でおなじみの形式に内部置換
+                fig.data[0].xaxis = "x"
+                fig.update_xaxes(
+                    tickformatstops=[
+                        dict(dtickrange=[None, 864000000], value="%m/%-d"), # 10日以内の表示レンジなら「7/5」形式
+                        dict(dtickrange=[864000000, None], value="%m/%-d")  # それ以上の広域レンジでも「7/5」形式
+                    ]
                 )
                 
                 row_count = len(filtered_df)
