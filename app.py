@@ -120,20 +120,28 @@ if not df.empty:
                 color_discrete_sequence=px.colors.qualitative.Bold
             )
             
-            # 🌟 変更点：左側の縦軸（y軸）の文字や目盛り、タイトルをすべて非表示に設定
+            # 左側の縦軸（y軸）の文字や目盛り、タイトルをすべて非表示に設定
             fig.update_yaxes(
-                showticklabels=False, # 軸の文字を非表示
-                title_text="",        # 軸のタイトル（生産者名）を非表示
-                showgrid=False        # 横方向の補助線を非表示にしてスッキリさせる
+                showticklabels=False, 
+                title_text="",        
+                showgrid=False        
             )
             
             fig.update_yaxes(autorange="reversed")
+            
+            # 🌟 変更点：X軸（日付目盛り）を数字（日）のみにし、5日刻み（432000000ミリ秒）に設定
+            fig.update_xaxes(
+                tickformat="%d",           # 日付のフォーマットを「日（数字のみ）」に指定
+                dtick=432000000,           # 5日間をミリ秒換算（1000ms * 60s * 60m * 24h * 5日）
+                showgrid=True,             # 5日ごとの縦のグリッド線を表示して見やすくする
+                gridcolor="rgba(200, 200, 200, 0.4)" # グリッド線を少し薄めのグレーに
+            )
             
             row_count = len(filtered_df)
             dynamic_height = max(350, row_count * 70)
             
             fig.update_layout(
-                xaxis_title="日付",
+                xaxis_title="日付（日）",
                 height=dynamic_height,
                 margin=dict(l=20, r=20, t=20, b=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
