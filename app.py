@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
-from streamlit_calendar import calendar  # 🌟 新規追加ライブラリ
+from streamlit_calendar import calendar
 from datetime import datetime
 
 # ページ基本設定
 st.set_page_config(
     page_title="YOKOTE AgriRev 出荷カレンダー",
     layout="wide",
-    initial_sidebar_state="collapsed"  # サイドバーは初期で隠す
+    initial_sidebar_state="collapsed"
 )
 
 # 全体のフォント・デザイン調整
@@ -19,8 +19,6 @@ st.markdown("""
     .main .block-container { padding-top: 2rem; }
     h1 { color: #1E3A8A; font-size: 20pt; font-weight: bold; margin-bottom: 20px; }
     h2 { color: #1E40AF; font-size: 14pt; margin-top: 25px; margin-bottom: 10px; }
-    
-    /* カレンダー内の文字がスマホでも見やすくなるよう微調整 */
     .fc-event-title { font-weight: bold; font-size: 9pt !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -38,15 +36,13 @@ def load_data(source_url_or_path):
             st.error(f"⚠️ スプレッドシートに以下の設問名が見つかりません: {missing_cols}")
             return pd.DataFrame()
         
-        # タイムゾーンの影響を受けないプレーンな日付に変換
         df['出荷開始日'] = pd.to_datetime(df['出荷開始予定日'], errors='coerce').dt.date
         df['出荷終了日_元データ'] = pd.to_datetime(df['出荷終了予定日'], errors='coerce').dt.date
         
         df = df.dropna(subset=['出荷開始日', '出荷終了日_元データ'])
         df['出荷予定ケース数'] = pd.to_numeric(df['出荷予定ケース数'], errors='coerce').fillna(0)
         
-        # カレンダーの標準仕様（終了日の前日までしかバーが伸びない現象）への対応
-        # 翌日の00:00:00を終了点に指定することで、終了日当日を丸ごと塗りつぶします
+        # カレンダーで最終日までしっかり色付けするための処理
         df['出荷終了日_カレンダー用'] = pd.to_datetime(df['出荷終了日_元データ']) + pd.Timedelta(days=1)
         
         return df
@@ -54,7 +50,6 @@ def load_data(source_url_or_path):
         st.error(f"データの読み込みに失敗しました: {e}")
         return pd.DataFrame()
 
-# GoogleスプレッドシートのCSV公開URL
 CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT8-Wda-QgU2r6VAcpAdZB6oqft1qV0dYk18_SorDMHPNF5BrMsmjkY3T3v-I1i2R1D7A5yy6RL87_w/pub?gid=878960407&single=true&output=csv"
 
 df = load_data(CSV_URL)
@@ -77,8 +72,6 @@ if not df.empty:
     if selected_variety != "すべて":
         filtered_df = filtered_df[filtered_df['品種'] == selected_variety]
 
-    # 最新の情報に更新ボタン
-    st.sidebar.markdown("---")
     if st.sidebar.button("最新の情報に更新", use_container_width=True):
         st.cache_data.clear()
         st.toast("スプレッドシートから最新データを取得しました！", icon="🔄")
@@ -87,17 +80,14 @@ if not df.empty:
     st.title("📦 YOKOTE AgriRev 出荷予定カレンダー")
     st.markdown("左上の「**＞**」ボタンから、生産者や品種での絞り込みが可能です。")
 
-    # タブメニューの切り替え（カレンダー画面 / データ明細画面）
     main_tab1, main_tab2 = st.tabs(["📅 月間カレンダー", "📊 出荷データ明細・集計"])
 
     # --- 【タブ1】月間カレンダー表示 ---
     with main_tab1:
-        # 品種ごとに見やすい背景色を自動で割り当てるカラーマップ（10色サイクル）
         colors = ["#1E40AF", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#14B8A6", "#F97316", "#64748B"]
         unique_varieties = sorted(filtered_df['品種'].unique().tolist())
         variety_color_map = {v: colors[i % len(colors)] for i, v in enumerate(unique_varieties)}
 
-        # スプレッドシートのデータをカレンダー専用のデータ構造（Event Object）に変換
         calendar_events = []
         for idx, row in filtered_df.iterrows():
             event_title = f"{row['生産者']} : {row['品種']} ({int(row['出荷予定ケース数']):,}c)"
@@ -107,54 +97,45 @@ if not df.empty:
                 "end": row['出荷終了日_カレンダー用'].strftime('%Y-%m-%dT%H:%M:%S'),
                 "backgroundColor": variety_color_map.get(row['品種'], "#3182ce"),
                 "borderColor": variety_color_map.get(row['品種'], "#3182ce"),
-                "allDay": True,
-                "extendedProps": {
-                    "producer": row['生産者'],
-                    "variety": row['品種'],
-                    "cases": f"{int(row['出荷予定ケース数']):,} ケース"
-                }
+                "allDay": True
             })
 
-        # 表示対象となる「月」の切り替えタブ（データ内に存在する月を自動抽出）
-        all_months = sorted(list(set(
-            pd.to_datetime(filtered_df['出荷開始予定日']).dt.strftime('%Y-%m').tolist()
-        )))
+        # 🌟 変更点：出荷開始日から終了日までの「すべての期間」から、存在する月を重複なく確実に抽出
+        months_set = set()
+        for idx, row in filtered_df.iterrows():
+            # 各データの開始月と終了月を両方リストに追加
+            months_set.add(row['出荷開始日'].strftime('%Y-%m'))
+            months_set.add(row['出荷終了日_元データ'].strftime('%Y-%m'))
+        all_months = sorted(list(months_set))
 
         if all_months:
-            # 直近の月を初期選択にするためのインデックス計算
-            current_month_str = datetime.now().strftime('%Y-%m')
-            default_month_idx = all_months.index(current_month_str) if current_month_str in all_months else 0
-            
             st.markdown("### 🗓️ 表示する月を選択")
             month_tabs = st.tabs([f"{m.split('-')[1]}月 ({m.split('-')[0]}年)" for m in all_months])
             
             for i, m_tab in enumerate(month_tabs):
                 with m_tab:
                     target_month = all_months[i]
-                    # カレンダーの初期表示日付を、選択された月の「1日」にセット
                     initial_date_str = f"{target_month}-01"
                     
-                    # カレンダーのオプション設定
                     calendar_options = {
                         "initialView": "dayGridMonth",
                         "initialDate": initial_date_str,
                         "headerToolbar": {
-                            "left": "",       # 前月・次月ボタンはStreamlitのタブで切り替えるため非表示
+                            "left": "",       
                             "center": "title",
                             "right": ""
                         },
-                        "locale": "ja",       # 日本語化（曜日などを「月」「火」表記に）
-                        "firstDay": 0,        # 日曜日から開始
-                        "height": 650,        # カレンダー全体の縦幅
+                        "locale": "ja",       
+                        "firstDay": 0,        
+                        "height": 650,        
                         "editable": False,
                         "selectable": False
                     }
                     
-                    # カレンダーコンポーネントの描画
                     calendar(
                         events=calendar_events,
                         options=calendar_options,
-                        key=f"calendar_{target_month}" # タブごとに一意のキーを指定
+                        key=f"calendar_{target_month}"
                     )
         else:
             st.warning("カレンダーに表示可能な有効な日付データがありません。")
