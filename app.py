@@ -5,7 +5,7 @@ from datetime import datetime
 
 # ページ基本設定
 st.set_page_config(
-    page_title="出荷予定ガントチャートシステム",
+    page_title="YOKOTE AgriRev 出荷予定タイムライン",  # 🌟 ブラウザのタブ名などを変更
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -19,7 +19,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📦 生産者グループ 出荷予定タイムライン")
+# 🌟 画面内のメインタイトルを変更
+st.title("📦 YOKOTE AgriRev 出荷予定タイムライン")
 st.markdown("Googleフォームから集計された出荷予定データをガントチャート形式でリアルタイムに表示します。")
 
 # --- 1. データ読み込み関数 ---
@@ -40,13 +41,12 @@ def load_data(source_url_or_path):
         df = df.dropna(subset=['出荷開始日', '出荷終了日'])
         df['出荷予定ケース数'] = pd.to_numeric(df['出荷予定ケース数'], errors='coerce').fillna(0)
         
-        # バーの中に「品種」と「ケース数」を2行で表示するためのラベル列を作成
+        # 文字の視認性を上げるため、文字色をHTMLタグで明示的に指定（白文字）
         df['バー表示ラベル'] = df.apply(
-            lambda row: f"{row['品種']}<br>({int(row['出荷予定ケース数']):,}ケース)", axis=1
+            lambda row: f"<span style='color:white;'><b>{row['生産者']}</b><br>{row['品種']}<br>({int(row['出荷予定ケース数']):,}ケース)</span>", axis=1
         )
         
-        # 🌟 重なり防止対策：1データごとに完全に独立した一意の行キー（ID）を作成
-        # これを縦軸（y）に指定することで、同じ生産者でも期間が重ならず別々の段に分かれます
+        # 重なり防止対策：1データごとに完全に独立した一意の行キー（ID）を作成
         df['行一意キー'] = df['生産者'] + "_" + df['品種'] + "_" + df['出荷開始予定日'] + "_" + df.index.astype(str)
         
         return df
@@ -98,7 +98,7 @@ if not df.empty:
             filtered_df['出荷開始日'] = pd.to_datetime(filtered_df['出荷開始日'])
             filtered_df['出荷終了日'] = pd.to_datetime(filtered_df['出荷終了日'])
 
-            # 🌟 重なり防止対策：y軸を「生産者」ではなく、データごとに独立した「行一意キー」に設定
+            # color_discrete_sequence に視認性が高くはっきりした色合いの「Bold」パレットを採用
             fig = px.timeline(
                 filtered_df, 
                 x_start="出荷開始日", 
@@ -115,11 +115,10 @@ if not df.empty:
                     "行一意キー": False
                 },
                 labels={"品種": "栽培品種"},
-                color_discrete_sequence=px.colors.qualitative.Safe
+                color_discrete_sequence=px.colors.qualitative.Bold
             )
             
-            # 🌟 重なり防止対策：グラフの左側に表示される見出しを「行一意キー」から「生産者名」に書き換える
-            # これにより、内部的には別々の行として扱いながら、見た目はきれいな「生産者名」になります
+            # グラフの左側の見出しを「生産者名」に設定
             fig.update_yaxes(
                 tickmode='array',
                 tickvals=filtered_df['行一意キー'],
@@ -127,15 +126,31 @@ if not df.empty:
             )
             
             fig.update_yaxes(autorange="reversed")
+            
+            # 行数に応じて高さを動的に変更（1行あたり70pxにしてさらに文字の上下余白を確保）
+            row_count = len(filtered_df)
+            dynamic_height = max(350, row_count * 70)
+            
             fig.update_layout(
                 xaxis_title="日付",
                 yaxis_title="生産者名",
-                height=500, # 行が増えても見やすいように少し高さを拡張
+                height=dynamic_height,
                 margin=dict(l=20, r=20, t=20, b=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 font=dict(size=12)
             )
-            fig.update_traces(textposition='inside', insidetextanchor='middle')
+            
+            # 文字のフォントサイズを「12」に拡大し、太字化、輪郭線を少しつけて文字をくっきりさせました
+            fig.update_traces(
+                textposition='inside', 
+                insidetextanchor='middle',
+                textfont=dict(
+                    size=12, 
+                    color="white", 
+                    family="Arial, sans-serif"
+                ),
+                width=0.85  # 帯の太さのバランスを微調整
+            )
             st.plotly_chart(fig, use_container_width=True)
             
         except Exception as plotly_err:
