@@ -15,11 +15,11 @@ st.markdown("""
     <style>
     .main .block-container { padding-top: 2rem; }
     h1 { color: #1E3A8A; font-size: 22pt; font-weight: bold; margin-bottom: 20px; }
-    h2 { color: #1E40AF; font-size: 15pt; margin-top: 15px; }
+    h2 { color: #1E40AF; font-size: 15pt; margin-top: 25px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📦 YOKOTE AgriRev 出荷予定タイムライン")
+st.title("📦 生産者グループ 出荷予定タイムライン")
 st.markdown("Googleフォームから集計された出荷予定データをガントチャート形式でリアルタイムに表示します。")
 
 # --- 1. データ読み込み関数 ---
@@ -40,7 +40,7 @@ def load_data(source_url_or_path):
         df = df.dropna(subset=['出荷開始日', '出荷終了日'])
         df['出荷予定ケース数'] = pd.to_numeric(df['出荷予定ケース数'], errors='coerce').fillna(0)
         
-        # 🌟 改良：バーの中に「品種」と「ケース数」を2行で表示するためのラベル列を作成
+        # バーの中に「品種」と「ケース数」を2行で表示するためのラベル列を作成
         df['バー表示ラベル'] = df.apply(
             lambda row: f"{row['品種']}<br>({int(row['出荷予定ケース数']):,}ケース)", axis=1
         )
@@ -99,7 +99,7 @@ if not df.empty:
                 x_end="出荷終了日", 
                 y="生産者",
                 color="品種", 
-                text="バー表示ラベル",  # 🌟 改良：2行（品種＋ケース数）のラベルを指定
+                text="バー表示ラベル",
                 hover_data={   
                     "出荷予定ケース数": ":,d", 
                     "出荷開始予定日": True, 
@@ -120,7 +120,6 @@ if not df.empty:
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 font=dict(size=12)
             )
-            # バーの中央にテキストを配置
             fig.update_traces(textposition='inside', insidetextanchor='middle')
             st.plotly_chart(fig, use_container_width=True)
             
@@ -130,43 +129,36 @@ if not df.empty:
     else:
         st.warning("条件に一致する有効な出荷予定データがありません。")
 
-    # 左右に並べて、左側に明細一覧、右側に品種別の合計集計を表示
-    col_left, col_right = st.columns([3, 2])
+    # --- 🌟 改良：2つのデータテーブルを縦並びに配置 ---
+    
+    # 5. 明細データ一覧テーブル
+    st.subheader("📋 出荷予定データ明細（一覧）")
+    display_df = filtered_df[['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']].sort_values(by='出荷開始予定日')
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    with col_left:
-        # --- 5. 明細データ一覧テーブル ---
-        st.subheader("📋 出荷予定データ明細（一覧）")
-        display_df = filtered_df[['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']].sort_values(by='出荷開始予定日')
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-    with col_right:
-        # --- 🌟 新機能: 6. 品種毎のケース数合計集計 ---
-        st.subheader("📈 品種毎の出荷予定ケース数合計")
-        if not filtered_df.empty:
-            # 品種ごとにグループ化して合計ケース数を算出、降順ソート
-            summary_variety = filtered_df.groupby('品種')['出荷予定ケース数'].sum().reset_index()
-            summary_variety = summary_variety.sort_values(by='出荷予定ケース数', ascending=False)
-            
-            # 見やすい表形式にするため列名を綺麗にする
-            summary_variety.columns = ['品種', '合計出荷ケース数']
-            
-            # 視覚的に分かりやすいよう、ミニ横棒グラフ付きの表として表示
-            st.dataframe(
-                summary_variety,
-                column_config={
-                    "合計出荷ケース数": st.column_config.ProgressColumn(
-                        "合計出荷ケース数（ケース）",
-                        help="品種ごとの合計予定数量です",
-                        format="%d",
-                        min_value=0,
-                        max_value=int(summary_variety['合計出荷ケース数'].max()) if not summary_variety.empty else 100,
-                    )
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("集計するデータがありません。")
+    # 6. 品種毎のケース数合計集計
+    st.subheader("📈 品種毎の出荷予定ケース数合計")
+    if not filtered_df.empty:
+        summary_variety = filtered_df.groupby('品種')['出荷予定ケース数'].sum().reset_index()
+        summary_variety = summary_variety.sort_values(by='出荷予定ケース数', ascending=False)
+        summary_variety.columns = ['品種', '合計出荷ケース数']
+        
+        st.dataframe(
+            summary_variety,
+            column_config={
+                "合計出荷ケース数": st.column_config.ProgressColumn(
+                    "合計出荷ケース数（ケース）",
+                    help="品種ごとの合計予定数量です",
+                    format="%d",
+                    min_value=0,
+                    max_value=int(summary_variety['合計出荷ケース数'].max()) if not summary_variety.empty else 100,
+                )
+            },
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("集計するデータがありません。")
 
 else:
     st.info("表示するデータがありません。Googleフォームからの回答を待機しています。")
