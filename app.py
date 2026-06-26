@@ -19,7 +19,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📦 生産者グループ 出荷予定タイムライン")
+st.title("📦 YOKOTE AgriRev 出荷予定タイムライン")
 st.markdown("Googleフォームから集計された出荷予定データをガントチャート形式でリアルタイムに表示します。")
 
 # --- 1. データ読み込み関数 ---
