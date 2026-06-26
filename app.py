@@ -7,7 +7,7 @@ from datetime import datetime
 st.set_page_config(
     page_title="YOKOTE AgriRev 出荷予定タイムライン",
     layout="wide",
-    initial_sidebar_state="collapsed"  # 🌟 変更点：サイドバーを初期状態で隠す（閉じる）設定
+    initial_sidebar_state="collapsed"
 )
 
 # デザインの微調整（全体のフォントをOS標準の読みやすいゴシック体に統一）
@@ -66,7 +66,7 @@ df = load_data(CSV_URL)
 # --- 2. サイドバーメニュー（画面切り替え・フィルター） ---
 st.sidebar.title("メニュー")
 
-# 🌟 変更点：画面切り替えメニューをサイドバー上部に配置
+# 画面切り替えメニューをサイドバー上部に配置
 page = st.sidebar.radio(
     "表示する画面を選択",
     ["📅 出荷スケジュール", "📊 出荷データ明細・集計"]
@@ -136,23 +136,23 @@ if not df.empty:
                 fig.update_yaxes(showticklabels=False, title_text="", showgrid=False)
                 fig.update_yaxes(autorange="reversed")
                 
-                # X軸（日付目盛り）を数字（日）のみにし、5日刻みに設定
+                # 🌟 変更点：X軸（日付目盛り）を「月/日」にし、1日刻み（86400000ミリ秒）に設定
                 fig.update_xaxes(
-                    tickformat="%d",           
-                    dtick=432000000,           
-                    showgrid=True,             
-                    gridcolor="rgba(200, 200, 200, 0.4)" 
+                    tickformat="%m/%d",        # 日付のフォーマットを「月/日」に指定
+                    dtick=86400000,            # 1日間をミリ秒換算（1000ms * 60s * 60m * 24h * 1日）
+                    showgrid=True,             # 1日ごとの縦のグリッド線を表示
+                    gridcolor="rgba(200, 200, 200, 0.4)" # グリッド線を少し薄めのグレーに
                 )
                 
                 row_count = len(filtered_df)
                 dynamic_height = max(320, row_count * 68)
                 
                 fig.update_layout(
-                    xaxis_title="日付（日）",
+                    xaxis_title="日付（月/日）",
                     height=dynamic_height,
                     margin=dict(l=10, r=10, t=10, b=10),
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    font=dict(size=11)
+                    font=dict(size=12)
                 )
                 
                 fig.update_traces(
