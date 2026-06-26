@@ -44,6 +44,11 @@ def load_data(source_url_or_path):
         df['バー表示ラベル'] = df.apply(
             lambda row: f"{row['品種']}<br>({int(row['出荷予定ケース数']):,}ケース)", axis=1
         )
+        
+        # 🌟 重なり防止対策：1データごとに完全に独立した一意の行キー（ID）を作成
+        # これを縦軸（y）に指定することで、同じ生産者でも期間が重ならず別々の段に分かれます
+        df['行一意キー'] = df['生産者'] + "_" + df['品種'] + "_" + df['出荷開始予定日'] + "_" + df.index.astype(str)
+        
         return df
     except Exception as e:
         st.error(f"データの読み込みに失敗しました: {e}")
@@ -93,29 +98,39 @@ if not df.empty:
             filtered_df['出荷開始日'] = pd.to_datetime(filtered_df['出荷開始日'])
             filtered_df['出荷終了日'] = pd.to_datetime(filtered_df['出荷終了日'])
 
+            # 🌟 重なり防止対策：y軸を「生産者」ではなく、データごとに独立した「行一意キー」に設定
             fig = px.timeline(
                 filtered_df, 
                 x_start="出荷開始日", 
                 x_end="出荷終了日", 
-                y="生産者",
+                y="行一意キー",
                 color="品種", 
                 text="バー表示ラベル",
                 hover_data={   
                     "出荷予定ケース数": ":,d", 
                     "出荷開始予定日": True, 
                     "出荷終了予定日": True,
-                    "生産者": False,
-                    "バー表示ラベル": False
+                    "生産者": True,
+                    "バー表示ラベル": False,
+                    "行一意キー": False
                 },
                 labels={"品種": "栽培品種"},
                 color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            
+            # 🌟 重なり防止対策：グラフの左側に表示される見出しを「行一意キー」から「生産者名」に書き換える
+            # これにより、内部的には別々の行として扱いながら、見た目はきれいな「生産者名」になります
+            fig.update_yaxes(
+                tickmode='array',
+                tickvals=filtered_df['行一意キー'],
+                ticktext=filtered_df['生産者']
             )
             
             fig.update_yaxes(autorange="reversed")
             fig.update_layout(
                 xaxis_title="日付",
                 yaxis_title="生産者名",
-                height=450,
+                height=500, # 行が増えても見やすいように少し高さを拡張
                 margin=dict(l=20, r=20, t=20, b=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 font=dict(size=12)
@@ -129,14 +144,12 @@ if not df.empty:
     else:
         st.warning("条件に一致する有効な出荷予定データがありません。")
 
-    # --- 🌟 改良：2つのデータテーブルを縦並びに配置 ---
-    
-    # 5. 明細データ一覧テーブル
+    # --- 5. 明細データ一覧テーブル ---
     st.subheader("📋 出荷予定データ明細（一覧）")
     display_df = filtered_df[['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']].sort_values(by='出荷開始予定日')
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    # 6. 品種毎のケース数合計集計
+    # --- 6. 品種毎のケース数合計集計 ---
     st.subheader("📈 品種毎の出荷予定ケース数合計")
     if not filtered_df.empty:
         summary_variety = filtered_df.groupby('品種')['出荷予定ケース数'].sum().reset_index()
