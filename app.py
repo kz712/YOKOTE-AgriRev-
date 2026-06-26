@@ -99,42 +99,53 @@ if not df.empty:
     # --- 4. ガントチャート（タイムライン）描画 ---
     st.subheader("📅 出荷スケジュール（ガントチャート）")
     
-    if not filtered_df.empty:
-        # Plotly Express の timeline を使ってガントチャートを作成
-        fig = px.timeline(
-            filtered_df, 
-            start="出荷開始日", 
-            end="出荷終了日", 
-            y="生産者",
-            color="品種", 
-            text="品種",  
-            hover_data={   
-                "出荷予定ケース数": ":,d", 
-                "出荷開始予定日": True, 
-                "出荷終了予定日": True,
-                "生産者": False
-            },
-            labels={"品種": "栽培品種"},
-            color_discrete_sequence=px.colors.qualitative.Safe
-        )
-        
-        # レイアウトの調整
-        fig.update_yaxes(autorange="reversed")  # 上から生産者が並ぶように
-        fig.update_layout(
-            xaxis_title="日付",
-            yaxis_title="生産者名",
-            height=450,
-            margin=dict(l=20, r=20, t=20, b=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            font=dict(size=12)
-        )
-        # バーの中央にテキストを配置
-        fig.update_traces(textposition='inside', insidetextanchor='center')
-        
-        # 画面に描画
-        st.plotly_chart(fig, use_container_width=True)
+    # データが1件以上あり、かつ有効な日付が存在するか二重チェック
+    if not filtered_df.empty and filtered_df['出荷開始日'].notna().any():
+        try:
+            # 描画の直前に日付型であることを再保証
+            filtered_df['出荷開始日'] = pd.to_datetime(filtered_df['出荷開始日'])
+            filtered_df['出荷終了日'] = pd.to_datetime(filtered_df['出荷終了日'])
+
+            # Plotly Express の timeline を使ってガントチャートを作成
+            fig = px.timeline(
+                filtered_df, 
+                start="出荷開始日", 
+                end="出荷終了日", 
+                y="生産者",
+                color="品種", 
+                text="品種",  
+                hover_data={   
+                    "出荷予定ケース数": ":,d", 
+                    "出荷開始予定日": True, 
+                    "出荷終了予定日": True,
+                    "生産者": False
+                },
+                labels={"品種": "栽培品種"},
+                color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            
+            # レイアウトの調整
+            fig.update_yaxes(autorange="reversed")  # 上から生産者が並ぶように
+            fig.update_layout(
+                xaxis_title="日付",
+                yaxis_title="生産者名",
+                height=450,
+                margin=dict(l=20, r=20, t=20, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                font=dict(size=12)
+            )
+            # バーの中央にテキストを配置
+            fig.update_traces(textposition='inside', insidetextanchor='center')
+            
+            # 画面に描画
+            st.plotly_chart(fig, use_container_width=True)
+            
+        except Exception as plotly_err:
+            # 万が一Plotlyの描画自体でエラーが起きた場合は、画面を落とさず安全な警告メッセージを表示
+            st.warning("📊 グラフの自動描画に失敗しました。データ形式（日付など）を確認してください。")
+            st.info(f"技術詳細: {plotly_err}")
     else:
-        st.warning("条件に一致する出荷予定データがありません。")
+        st.warning("条件に一致する有効な出荷予定データがありません（または日付が正しく入力されていません）。")
 
     # --- 5. 明細データ一覧テーブル ---
     st.subheader("📋 出荷予定データ明細（一覧）")
