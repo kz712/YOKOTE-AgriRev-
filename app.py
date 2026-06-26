@@ -3,14 +3,14 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# ページ基本設定
+# ページ基本設定（横長画面を広く使えるようにワイドモードに設定）
 st.set_page_config(
     page_title="出荷予定ガントチャートシステム",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# デザインの微調整
+# デザインの微調整（CSSを埋め込んでフォントサイズや余白を調整）
 st.markdown("""
     <style>
     .main .block-container { padding-top: 2rem; }
@@ -22,49 +22,53 @@ st.markdown("""
 st.title("📦 生産者グループ 出荷予定タイムライン")
 st.markdown("Googleフォームから集計された出荷予定データをガントチャート形式でリアルタイムに表示します。")
 
-# --- 1. データ読み込み関数 ---
-@st.cache_data(ttl=300)  # 5分間キャッシュ
+# --- 1. データ読み込み関数（エラー対策強化版） ---
+@st.cache_data(ttl=300)  # 5分間キャッシュ（アクセス負荷軽減・高速化のため）
 def load_data(source_url_or_path):
     try:
         df = pd.read_csv(source_url_or_path)
         
-        # カラム名の前後の不要な空白を削除
+        # カラム名（設問名）の前後の不要な空白や改行を完全に除去
         df.columns = df.columns.str.strip()
         
-        # 変更後の設問名に合わせた日付型への変換
-        df['出荷開始日'] = pd.to_datetime(df['出荷開始予定日'])
-        df['出荷終了日'] = pd.to_datetime(df['出荷終了予定日'])
+        # 【チェック1】必須カラムが存在するか確認
+        required_cols = ['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            st.error(f"⚠️ スプレッドシートに以下の設問名が見つかりません: {missing_cols}")
+            st.info(f"現在のスプレッドシートの列名: {list(df.columns)}")
+            st.info("Googleフォームの質問タイトルがコードと完全に一致しているか確認してください。")
+            return pd.DataFrame()
         
-        # 出荷ケース数を数値型に変換（エラーは0に置換）
+        # 【チェック2】日付型への強制変換（errors='coerce' で不正な文字が入っていてもNaTにしてエラーを防ぐ）
+        df['出荷開始日'] = pd.to_datetime(df['出荷開始予定日'], errors='coerce')
+        df['出荷終了日'] = pd.to_datetime(df['出荷終了予定日'], errors='coerce')
+        
+        # 空白行や、日付が正しく入力（変換）されていない不正行を安全に除外
+        df = df.dropna(subset=['出荷開始日', '出荷終了日'])
+        
+        # 出荷ケース数を数値型に変換（空欄などは0に置換）
         df['出荷予定ケース数'] = pd.to_numeric(df['出荷予定ケース数'], errors='coerce').fillna(0)
         return df
     except Exception as e:
         st.error(f"データの読み込みに失敗しました。設定を確認してください: {e}")
         return pd.DataFrame()
 
-# --- 【本番運用時の設定】 ---
-# スプレッドシートの「ウェブに公開」から取得したCSVのURLをここに貼り付けます
-# CSV_URL = "https://docs.google.com/spreadsheets/d/e/YOUR_ID/pub?output=csv"
+# --- 【指定されたGoogleスプレッドシートのCSV公開URL】 ---
 CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT8-Wda-QgU2r6VAcpAdZB6oqft1qV0dYk18_SorDMHPNF5BrMsmjkY3T3v-I1i2R1D7A5yy6RL87_w/pub?gid=878960407&single=true&output=csv"
 
-# デモ用データのカラム名も新しい設問名に更新して上書き（検証用）
-import os
-if not os.path.exists("app_src"):
-    os.makedirs("app_src")
-demo_data = pd.DataFrame({
-    "タイムスタンプ": ["2026/06/20 10:00:00", "2026/06/21 11:30:00", "2026/06/22 09:15:00", "2026/06/23 14:00:00"],
-    "生産者": ["田中農園", "鈴木ファーム", "佐藤ファーム", "田中農園"],
-    "品種": ["羅皇", "金色羅皇", "羅皇", "マダーボール"],
-    "出荷開始予定日": ["2026-07-05", "2026-07-10", "2026-07-01", "2026-07-15"],
-    "出荷終了予定日": ["2026-07-20", "2026-07-25", "2026-07-15", "2026-07-30"],
-    "出荷予定ケース数": [500, 300, 400, 200]
-})
-demo_data.to_csv("app_src/demo_shipping_data.csv", index=False)
+# --- 【手動更新ボタンの設置】 ---
+st.sidebar.header("🔄 システム操作")
+if st.sidebar.button("最新の情報に更新", use_container_width=True):
+    # キャッシュを強制クリアしてスプレッドシートから再読み込み
+    st.cache_data.clear()
+    st.toast("スプレッドシートから最新データを取得しました！", icon="🔄")
 
+# データ読み込みの実行
 df = load_data(CSV_URL)
 
 if not df.empty:
-    # --- 2. サイドバー（新設問名に対応） ---
+    # --- 2. サイドバー（フィルター機能） ---
     st.sidebar.header("🔍 表示条件で絞り込み")
     
     # 生産者で絞り込み
@@ -75,14 +79,14 @@ if not df.empty:
     all_varieties = ["すべて"] + sorted(df['品種'].unique().tolist())
     selected_variety = st.sidebar.selectbox("品種を選択", all_varieties)
     
-    # フィルタリング
+    # フィルタリング処理
     filtered_df = df.copy()
     if selected_producer != "すべて":
         filtered_df = filtered_df[filtered_df['生産者'] == selected_producer]
     if selected_variety != "すべて":
         filtered_df = filtered_df[filtered_df['品種'] == selected_variety]
 
-    # --- 3. 集計サマリー（新設問名に対応） ---
+    # --- 3. 集計サマリー（KPI） ---
     st.subheader("📊 現在の集計サマリー")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -92,15 +96,16 @@ if not df.empty:
     with col3:
         st.metric(label="現在の稼働生産者数", value=f"{filtered_df['生産者'].nunique()} 名")
 
-    # --- 4. ガントチャート（新設問名に対応） ---
+    # --- 4. ガントチャート（タイムライン）描画 ---
     st.subheader("📅 出荷スケジュール（ガントチャート）")
     
     if not filtered_df.empty:
+        # Plotly Express の timeline を使ってガントチャートを作成
         fig = px.timeline(
             filtered_df, 
             start="出荷開始日", 
             end="出荷終了日", 
-            y="生産者",  # 縦軸を「生産者」に
+            y="生産者",
             color="品種", 
             text="品種",  
             hover_data={   
@@ -113,7 +118,8 @@ if not df.empty:
             color_discrete_sequence=px.colors.qualitative.Safe
         )
         
-        fig.update_yaxes(autorange="reversed")  
+        # レイアウトの調整
+        fig.update_yaxes(autorange="reversed")  # 上から生産者が並ぶように
         fig.update_layout(
             xaxis_title="日付",
             yaxis_title="生産者名",
@@ -122,8 +128,10 @@ if not df.empty:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             font=dict(size=12)
         )
+        # バーの中央にテキストを配置
         fig.update_traces(textposition='inside', insidetextanchor='center')
         
+        # 画面に描画
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("条件に一致する出荷予定データがありません。")
