@@ -10,12 +10,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# デザインの微調整
+# デザインの微調整（全体のフォントをOS標準の読みやすいゴシック体に統一）
 st.markdown("""
     <style>
+    html, body, [class*="css"] {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+    }
     .main .block-container { padding-top: 2rem; }
-    h1 { color: #1E3A8A; font-size: 22pt; font-weight: bold; margin-bottom: 20px; }
-    h2 { color: #1E40AF; font-size: 15pt; margin-top: 25px; margin-bottom: 10px; }
+    h1 { color: #1E3A8A; font-size: 20pt; font-weight: bold; margin-bottom: 20px; }
+    h2 { color: #1E40AF; font-size: 14pt; margin-top: 25px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -129,32 +132,39 @@ if not df.empty:
             
             fig.update_yaxes(autorange="reversed")
             
-            # 🌟 変更点：X軸（日付目盛り）を数字（日）のみにし、5日刻み（432000000ミリ秒）に設定
+            # X軸（日付目盛り）を数字（日）のみにし、5日刻みに設定
             fig.update_xaxes(
-                tickformat="%d",           # 日付のフォーマットを「日（数字のみ）」に指定
-                dtick=432000000,           # 5日間をミリ秒換算（1000ms * 60s * 60m * 24h * 5日）
-                showgrid=True,             # 5日ごとの縦のグリッド線を表示して見やすくする
-                gridcolor="rgba(200, 200, 200, 0.4)" # グリッド線を少し薄めのグレーに
+                tickformat="%d",           
+                dtick=432000000,           
+                showgrid=True,             
+                gridcolor="rgba(200, 200, 200, 0.4)" 
             )
             
+            # 🌟 画面サイズ最適化：データ件数に応じた動的な高さ計算を微調整
             row_count = len(filtered_df)
-            dynamic_height = max(350, row_count * 70)
+            dynamic_height = max(320, row_count * 68)
             
             fig.update_layout(
                 xaxis_title="日付（日）",
                 height=dynamic_height,
-                margin=dict(l=20, r=20, t=20, b=20),
+                margin=dict(l=10, r=10, t=10, b=10), # 余白を詰めてバーの領域を最大化
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                font=dict(size=12)
+                font=dict(size=11) # 基本フォントサイズをやや引き締め
             )
             
+            # 🌟 画面サイズ最適化：端末の画面幅に応じてテキストサイズや配置を柔軟にする設定
             fig.update_traces(
                 textposition='inside', 
                 insidetextanchor='middle',
-                textfont=dict(size=12, color="white", family="Arial, sans-serif"),
-                width=0.85
+                textfont=dict(
+                    size=11, # スマートフォンでもはみ出ない最適な大きさに調整
+                    color="white"
+                ),
+                width=0.88 # 帯の太さを保ち、テキストの上下に余裕をもたせる
             )
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # 🌟 画面サイズ最適化：StreamlitにPlotlyを渡す際、横幅の自動伸縮（responsive=True）を明示
+            st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
             
         except Exception as plotly_err:
             st.warning("📊 グラフの自動描画に失敗しました。データ形式を確認してください。")
