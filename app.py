@@ -106,7 +106,7 @@ if not df.empty:
             filtered_df['出荷開始日'] = pd.to_datetime(filtered_df['出荷開始日'])
             filtered_df['出荷終了日'] = pd.to_datetime(filtered_df['出荷終了日'])
 
-            # 🌟 引数の指定を正しいキーワード (x_start, x_end) に修正しました
+            # 正しいキーワード (x_start, x_end) を指定
             fig = px.timeline(
                 filtered_df, 
                 x_start="出荷開始日", 
@@ -134,8 +134,8 @@ if not df.empty:
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 font=dict(size=12)
             )
-            # バーの中央にテキストを配置
-            fig.update_traces(textposition='inside', insidetextanchor='center')
+            # バーの中央にテキストを配置（'middle' に修正）
+            fig.update_traces(textposition='inside', insidetextanchor='middle')
             
             # 画面に描画
             st.plotly_chart(fig, use_container_width=True)
