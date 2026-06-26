@@ -106,11 +106,11 @@ if not df.empty:
             filtered_df['出荷開始日'] = pd.to_datetime(filtered_df['出荷開始日'])
             filtered_df['出荷終了日'] = pd.to_datetime(filtered_df['出荷終了日'])
 
-            # Plotly Express の timeline を使ってガントチャートを作成
+            # 🌟 引数の指定を正しいキーワード (x_start, x_end) に修正しました
             fig = px.timeline(
                 filtered_df, 
-                start="出荷開始日", 
-                end="出荷終了日", 
+                x_start="出荷開始日", 
+                x_end="出荷終了日", 
                 y="生産者",
                 color="品種", 
                 text="品種",  
@@ -141,7 +141,7 @@ if not df.empty:
             st.plotly_chart(fig, use_container_width=True)
             
         except Exception as plotly_err:
-            # 万が一Plotlyの描画自体でエラーが起きた場合は、画面を落とさず安全な警告メッセージを表示
+            # 万が一描画自体でエラーが起きた場合は、安全な警告メッセージを表示
             st.warning("📊 グラフの自動描画に失敗しました。データ形式（日付など）を確認してください。")
             st.info(f"技術詳細: {plotly_err}")
     else:
