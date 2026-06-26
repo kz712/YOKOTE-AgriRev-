@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🌟 変更点：スマホ画面（レスポンシブ）に特化したフォントサイズと段組のスタイル調整
+# スマホ画面（レスポンシブ）に特化したフォントサイズと段組のスタイル調整
 st.markdown("""
     <style>
     /* 全体フォント設定 */
@@ -29,7 +29,7 @@ st.markdown("""
     .fc-event-title { 
         font-weight: bold; 
         font-size: 9.5pt !important; 
-        white-space: normal !important; /* 文字の自動折り返しを許可 */
+        white-space: normal !important; 
     }
     
     /* 📱 スマートフォン（画面幅768px以下）用の最適化設定 */
@@ -114,7 +114,6 @@ if not df.empty:
     # --- 3. メイン画面の構築 ---
     st.title("📦 YOKOTE AgriRev 出荷予定カレンダー")
     
-    # 🌟 タブの文字もスマホで見やすくなるようフラットに配置
     main_tab1, main_tab2 = st.tabs(["📅 月間カレンダー", "📊 出荷データ明細・集計"])
 
     # --- 【タブ1】月間カレンダー表示 ---
@@ -123,6 +122,7 @@ if not df.empty:
         unique_varieties = sorted(filtered_df['品種'].unique().tolist())
         variety_color_map = {v: colors[i % len(colors)] for i, v in enumerate(unique_varieties)}
 
+        # カレンダーイベントの作成（構文エラーを完全修正）
         calendar_events = []
         for idx, row in filtered_df.iterrows():
             event_title = f"{row['生産者']}:{row['品種']}({int(row['出荷予定ケース数']):,}c)"
@@ -131,4 +131,87 @@ if not df.empty:
                 "start": row['出荷開始日'].isoformat(),
                 "end": row['出荷終了日_カレンダー用'].strftime('%Y-%m-%dT%H:%M:%S'),
                 "backgroundColor": variety_color_map.get(row['品種'], "#3182ce"),
-                "borderColor": variety_color_map.get(
+                "borderColor": variety_color_map.get(row['品種'], "#3182ce"),
+                "allDay": True
+            })
+
+        # 期間内の月を重複なく抽出
+        months_set = set()
+        for idx, row in filtered_df.iterrows():
+            months_set.add(row['出荷開始日'].strftime('%Y-%m'))
+            months_set.add(row['出荷終了日_元データ'].strftime('%Y-%m'))
+        all_months = sorted(list(months_set))
+
+        if all_months:
+            st.markdown("### 🗓️ 表示する月を選択")
+            month_tabs = st.tabs([f"{m.split('-')[1]}月" for m in all_months])
+            
+            for i, m_tab in enumerate(month_tabs):
+                with m_tab:
+                    target_month = all_months[i]
+                    initial_date_str = f"{target_month}-01"
+                    
+                    calendar_options = {
+                        "initialView": "dayGridMonth",
+                        "initialDate": initial_date_str,
+                        "headerToolbar": {
+                            "left": "",       
+                            "center": "title",
+                            "right": ""
+                        },
+                        "locale": "ja",       
+                        "firstDay": 0,        
+                        "height": "auto",  
+                        "editable": False,
+                        "selectable": False
+                    }
+                    
+                    calendar(
+                        events=calendar_events,
+                        options=calendar_options,
+                        key=f"calendar_{target_month}"
+                    )
+        else:
+            st.warning("カレンダーに表示可能な有効な日付データがありません。")
+
+    # --- 【タブ2】出荷データ明細・集計サマリー ---
+    with main_tab2:
+        st.subheader("📊 現在の集計サマリー")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="登録総出荷件数", value=f"{len(filtered_df)} 件")
+        with col2:
+            st.metric(label="合計出荷予定ケース数", value=f"{int(filtered_df['出荷予定ケース数'].sum()):,} ケース")
+        with col3:
+            st.metric(label="現在の稼働生産者数", value=f"{filtered_df['生産者'].nunique()} 名")
+            
+        st.subheader("📋 出荷予定データ明細（一覧）")
+        display_df = filtered_df[['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']].sort_values(by='出荷開始予定日')
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        st.subheader("📈 品種毎の出荷予定ケース数合計")
+        if not filtered_df.empty:
+            summary_variety = filtered_df.groupby('品種')['出荷予定ケース数'].sum().reset_index()
+            summary_variety = summary_variety.sort_values(by='出荷予定ケース数', ascending=False)
+            summary_variety.columns = ['品種', '合計出荷ケース数']
+            
+            st.dataframe(
+                summary_variety,
+                column_config={
+                    "合計出荷ケース数": st.column_config.ProgressColumn(
+                        "合計出荷ケース数（ケース）",
+                        help="品種ごとの合計予定数量です",
+                        format="%d",
+                        min_value=0,
+                        max_value=int(summary_variety['合計出荷ケース数'].max()) if not summary_variety.empty else 100,
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("集計するデータがありません。")
+
+else:
+    st.info("表示するデータがありません。Googleフォームからの回答を待機しています。")
