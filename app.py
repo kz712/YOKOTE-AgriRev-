@@ -36,15 +36,14 @@ def load_data(source_url_or_path):
             st.error(f"⚠️ スプレッドシートに以下の設問名が見つかりません: {missing_cols}")
             return pd.DataFrame()
         
-        # 🌟 対策1: 日付変換時にタイムゾーン（時差）のバグを防ぐため、シンプルな日付型として読み込み
+        # 日付変換時にタイムゾーン（時差）のバグを防ぐため、シンプルな日付型として読み込み
         df['出荷開始日'] = pd.to_datetime(df['出荷開始予定日'], errors='coerce').dt.date
         df['出荷終了日_元データ'] = pd.to_datetime(df['出荷終了予定日'], errors='coerce').dt.date
         
         df = df.dropna(subset=['出荷開始日', '出荷終了日_元データ'])
         df['出荷予定ケース数'] = pd.to_numeric(df['出荷予定ケース数'], errors='coerce').fillna(0)
         
-        # 🌟 対策2: Plotlyの仕様（終了日の0時00分までしか描画されない問題）への対応
-        # グラフ描画用には「終了日 + 1日」した日付を渡し、その日のギリギリまでバーを伸ばします
+        # Plotlyの仕様（終了日の0時00分までしか描画されない問題）への対応
         df['出荷終了日_グラフ用'] = pd.to_datetime(df['出荷終了日_元データ']) + pd.Timedelta(days=1)
         
         # 文字の視認性を上げるため、文字色をHTMLタグで明示的に指定（白文字）
@@ -101,7 +100,6 @@ if not df.empty:
     
     if not filtered_df.empty:
         try:
-            # 🌟 グラフの終了日キーを「出荷終了日_グラフ用」に指定
             fig = px.timeline(
                 filtered_df, 
                 x_start="出荷開始日", 
@@ -111,22 +109,22 @@ if not df.empty:
                 text="バー表示ラベル",
                 hover_data={   
                     "出荷予定ケース数": ":,d", 
-                    "出荷開始予定日": True,   # 元データのテキストを表示
-                    "出荷終了予定日": True,   # 元データのテキストを表示
+                    "出荷開始予定日": True, 
+                    "出荷終了予定日": True, 
                     "生産者": True,
                     "バー表示ラベル": False,
                     "行一意キー": False,
-                    "出荷終了日_グラフ用": False  # 内部補正用の日付は隠す
+                    "出荷終了日_グラフ用": False 
                 },
                 labels={"品種": "栽培品種"},
                 color_discrete_sequence=px.colors.qualitative.Bold
             )
             
-            # グラフの左側の見出しを「生産者名」に設定
+            # 🌟 変更点：左側の縦軸（y軸）の文字や目盛り、タイトルをすべて非表示に設定
             fig.update_yaxes(
-                tickmode='array',
-                tickvals=filtered_df['行一意キー'],
-                ticktext=filtered_df['生産者']
+                showticklabels=False, # 軸の文字を非表示
+                title_text="",        # 軸のタイトル（生産者名）を非表示
+                showgrid=False        # 横方向の補助線を非表示にしてスッキリさせる
             )
             
             fig.update_yaxes(autorange="reversed")
@@ -136,7 +134,6 @@ if not df.empty:
             
             fig.update_layout(
                 xaxis_title="日付",
-                yaxis_title="生産者名",
                 height=dynamic_height,
                 margin=dict(l=20, r=20, t=20, b=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
