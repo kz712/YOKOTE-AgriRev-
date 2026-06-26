@@ -7,7 +7,7 @@ from datetime import datetime
 st.set_page_config(
     page_title="YOKOTE AgriRev 出荷予定タイムライン",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"  # 🌟 変更点：サイドバーを初期状態で隠す（閉じる）設定
 )
 
 # デザインの微調整（全体のフォントをOS標準の読みやすいゴシック体に統一）
@@ -21,10 +21,6 @@ st.markdown("""
     h2 { color: #1E40AF; font-size: 14pt; margin-top: 25px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
-
-# 画面内のメインタイトル
-st.title("📦 YOKOTE AgriRev 出荷予定タイムライン")
-st.markdown("Googleフォームから集計された出荷予定データをガントチャート形式でリアルタイムに表示します。")
 
 # --- 1. データ読み込み関数 ---
 @st.cache_data(ttl=300)
@@ -65,17 +61,21 @@ def load_data(source_url_or_path):
 # GoogleスプレッドシートのCSV公開URL
 CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT8-Wda-QgU2r6VAcpAdZB6oqft1qV0dYk18_SorDMHPNF5BrMsmjkY3T3v-I1i2R1D7A5yy6RL87_w/pub?gid=878960407&single=true&output=csv"
 
-# --- 手動更新ボタン ---
-st.sidebar.header("🔄 システム操作")
-if st.sidebar.button("最新の情報に更新", use_container_width=True):
-    st.cache_data.clear()
-    st.toast("スプレッドシートから最新データを取得しました！", icon="🔄")
-
 df = load_data(CSV_URL)
 
+# --- 2. サイドバーメニュー（画面切り替え・フィルター） ---
+st.sidebar.title("メニュー")
+
+# 🌟 変更点：画面切り替えメニューをサイドバー上部に配置
+page = st.sidebar.radio(
+    "表示する画面を選択",
+    ["📅 出荷スケジュール", "📊 出荷データ明細・集計"]
+)
+
+st.sidebar.markdown("---")
+st.sidebar.header("🔍 表示条件で絞り込み")
+
 if not df.empty:
-    # --- 2. サイドバー（フィルター機能） ---
-    st.sidebar.header("🔍 表示条件で絞り込み")
     all_producers = ["すべて"] + sorted(df['生産者'].unique().tolist())
     selected_producer = st.sidebar.selectbox("生産者を選択", all_producers)
     
@@ -88,118 +88,131 @@ if not df.empty:
     if selected_variety != "すべて":
         filtered_df = filtered_df[filtered_df['品種'] == selected_variety]
 
-    # --- 3. 集計サマリー（KPI） ---
-    st.subheader("📊 現在の集計サマリー")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="登録総出荷件数", value=f"{len(filtered_df)} 件")
-    with col2:
-        st.metric(label="合計出荷予定ケース数", value=f"{int(filtered_df['出荷予定ケース数'].sum()):,} ケース")
-    with col3:
-        st.metric(label="現在の稼働生産者数", value=f"{filtered_df['生産者'].nunique()} 名")
+    # 手動更新ボタンをサイドバー最下部に配置
+    st.sidebar.markdown("---")
+    if st.sidebar.button("最新の情報に更新", use_container_width=True):
+        st.cache_data.clear()
+        st.toast("スプレッドシートから最新データを取得しました！", icon="🔄")
 
-    # --- 4. ガントチャート（タイムライン）描画 ---
-    st.subheader("📅 出荷スケジュール（ガントチャート）")
-    
-    if not filtered_df.empty:
-        try:
-            fig = px.timeline(
-                filtered_df, 
-                x_start="出荷開始日", 
-                x_end="出荷終了日_グラフ用", 
-                y="行一意キー",
-                color="品種", 
-                text="バー表示ラベル",
-                hover_data={   
-                    "出荷予定ケース数": ":,d", 
-                    "出荷開始予定日": True, 
-                    "出荷終了予定日": True, 
-                    "生産者": True,
-                    "バー表示ラベル": False,
-                    "行一意キー": False,
-                    "出荷終了日_グラフ用": False 
-                },
-                labels={"品種": "栽培品種"},
-                color_discrete_sequence=px.colors.qualitative.Bold
-            )
-            
-            # 左側の縦軸（y軸）の文字や目盛り、タイトルをすべて非表示に設定
-            fig.update_yaxes(
-                showticklabels=False, 
-                title_text="",        
-                showgrid=False        
-            )
-            
-            fig.update_yaxes(autorange="reversed")
-            
-            # X軸（日付目盛り）を数字（日）のみにし、5日刻みに設定
-            fig.update_xaxes(
-                tickformat="%d",           
-                dtick=432000000,           
-                showgrid=True,             
-                gridcolor="rgba(200, 200, 200, 0.4)" 
-            )
-            
-            # 🌟 画面サイズ最適化：データ件数に応じた動的な高さ計算を微調整
-            row_count = len(filtered_df)
-            dynamic_height = max(320, row_count * 68)
-            
-            fig.update_layout(
-                xaxis_title="日付（日）",
-                height=dynamic_height,
-                margin=dict(l=10, r=10, t=10, b=10), # 余白を詰めてバーの領域を最大化
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                font=dict(size=11) # 基本フォントサイズをやや引き締め
-            )
-            
-            # 🌟 画面サイズ最適化：端末の画面幅に応じてテキストサイズや配置を柔軟にする設定
-            fig.update_traces(
-                textposition='inside', 
-                insidetextanchor='middle',
-                textfont=dict(
-                    size=11, # スマートフォンでもはみ出ない最適な大きさに調整
-                    color="white"
-                ),
-                width=0.88 # 帯の太さを保ち、テキストの上下に余裕をもたせる
-            )
-            
-            # 🌟 画面サイズ最適化：StreamlitにPlotlyを渡す際、横幅の自動伸縮（responsive=True）を明示
-            st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
-            
-        except Exception as plotly_err:
-            st.warning("📊 グラフの自動描画に失敗しました。データ形式を確認してください。")
-            st.info(f"技術詳細: {plotly_err}")
-    else:
-        st.warning("条件に一致する有効な出荷予定データがありません。")
-
-    # --- 5. 明細データ一覧テーブル ---
-    st.subheader("📋 出荷予定データ明細（一覧）")
-    display_df = filtered_df[['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']].sort_values(by='出荷開始予定日')
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-    # --- 6. 品種毎のケース数合計集計 ---
-    st.subheader("📈 品種毎の出荷予定ケース数合計")
-    if not filtered_df.empty:
-        summary_variety = filtered_df.groupby('品種')['出荷予定ケース数'].sum().reset_index()
-        summary_variety = summary_variety.sort_values(by='出荷予定ケース数', ascending=False)
-        summary_variety.columns = ['品種', '合計出荷ケース数']
+    # --- 3. 【画面A】出荷スケジュール（ガントチャート） ---
+    if page == "📅 出荷スケジュール":
+        st.title("📦 YOKOTE AgriRev 出荷予定タイムライン")
+        st.markdown("左上の「**＞**」ボタンを押すと、生産者や品種での絞り込みメニューが開きます。")
         
-        st.dataframe(
-            summary_variety,
-            column_config={
-                "合計出荷ケース数": st.column_config.ProgressColumn(
-                    "合計出荷ケース数（ケース）",
-                    help="品種ごとの合計予定数量です",
-                    format="%d",
-                    min_value=0,
-                    max_value=int(summary_variety['合計出荷ケース数'].max()) if not summary_variety.empty else 100,
+        # 簡易サマリー（チャート画面上部にも最低限の数字を配置）
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="現在の稼働生産者数", value=f"{filtered_df['生産者'].nunique()} 名")
+        with col2:
+            st.metric(label="合計出荷予定ケース数", value=f"{int(filtered_df['出荷予定ケース数'].sum()):,} ケース")
+        with col3:
+            st.metric(label="選択中のデータ件数", value=f"{len(filtered_df)} 件")
+            
+        st.subheader("📅 出荷スケジュール（ガントチャート）")
+        
+        if not filtered_df.empty:
+            try:
+                fig = px.timeline(
+                    filtered_df, 
+                    x_start="出荷開始日", 
+                    x_end="出荷終了日_グラフ用", 
+                    y="行一意キー",
+                    color="品種", 
+                    text="バー表示ラベル",
+                    hover_data={   
+                        "出荷予定ケース数": ":,d", 
+                        "出荷開始予定日": True, 
+                        "出荷終了予定日": True, 
+                        "生産者": True,
+                        "バー表示ラベル": False,
+                        "行一意キー": False,
+                        "出荷終了日_グラフ用": False 
+                    },
+                    labels={"品種": "栽培品種"},
+                    color_discrete_sequence=px.colors.qualitative.Bold
                 )
-            },
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("集計するデータがありません。")
+                
+                # 左側の縦軸（y軸）の文字や目盛り、タイトルをすべて非表示に設定
+                fig.update_yaxes(showticklabels=False, title_text="", showgrid=False)
+                fig.update_yaxes(autorange="reversed")
+                
+                # X軸（日付目盛り）を数字（日）のみにし、5日刻みに設定
+                fig.update_xaxes(
+                    tickformat="%d",           
+                    dtick=432000000,           
+                    showgrid=True,             
+                    gridcolor="rgba(200, 200, 200, 0.4)" 
+                )
+                
+                row_count = len(filtered_df)
+                dynamic_height = max(320, row_count * 68)
+                
+                fig.update_layout(
+                    xaxis_title="日付（日）",
+                    height=dynamic_height,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    font=dict(size=11)
+                )
+                
+                fig.update_traces(
+                    textposition='inside', 
+                    insidetextanchor='middle',
+                    textfont=dict(size=11, color="white"),
+                    width=0.88
+                )
+                
+                st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
+                
+            except Exception as plotly_err:
+                st.warning("📊 グラフの自動描画に失敗しました。データ形式を確認してください。")
+                st.info(f"技術詳細: {plotly_err}")
+        else:
+            st.warning("条件に一致する有効な出荷予定データがありません。")
+
+    # --- 4. 【画面B】出荷データ明細・集計サマリー ---
+    elif page == "📊 出荷データ明細・集計":
+        st.title("📊 YOKOTE AgriRev 集計・データ明細")
+        st.markdown("登録されたデータの詳細および品種ごとの合算数量を確認できます。")
+        
+        # 集計サマリー（KPI）
+        st.subheader("📊 現在の集計サマリー")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="登録総出荷件数", value=f"{len(filtered_df)} 件")
+        with col2:
+            st.metric(label="合計出荷予定ケース数", value=f"{int(filtered_df['出荷予定ケース数'].sum()):,} ケース")
+        with col3:
+            st.metric(label="現在の稼働生産者数", value=f"{filtered_df['生産者'].nunique()} 名")
+            
+        # 明細データ一覧テーブル
+        st.subheader("📋 出荷予定データ明細（一覧）")
+        display_df = filtered_df[['生産者', '品種', '出荷開始予定日', '出荷終了予定日', '出荷予定ケース数']].sort_values(by='出荷開始予定日')
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        # 品種毎のケース数合計集計
+        st.subheader("📈 品種毎の出荷予定ケース数合計")
+        if not filtered_df.empty:
+            summary_variety = filtered_df.groupby('品種')['出荷予定ケース数'].sum().reset_index()
+            summary_variety = summary_variety.sort_values(by='出荷予定ケース数', ascending=False)
+            summary_variety.columns = ['品種', '合計出荷ケース数']
+            
+            st.dataframe(
+                summary_variety,
+                column_config={
+                    "合計出荷ケース数": st.column_config.ProgressColumn(
+                        "合計出荷ケース数（ケース）",
+                        help="品種ごとの合計予定数量です",
+                        format="%d",
+                        min_value=0,
+                        max_value=int(summary_variety['合計出荷ケース数'].max()) if not summary_variety.empty else 100,
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("集計するデータがありません。")
 
 else:
     st.info("表示するデータがありません。Googleフォームからの回答を待機しています。")
